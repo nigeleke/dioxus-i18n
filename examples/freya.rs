@@ -8,6 +8,7 @@ use freya::prelude::*;
 use unic_langid::langid;
 
 fn main() {
+    panic!("Freya doesn't support Dioxus 0.6 yet");
     launch_with_props(app, "freya + i18n", (300.0, 200.0));
 }
 
