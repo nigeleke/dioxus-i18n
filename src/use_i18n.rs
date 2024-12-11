@@ -130,7 +130,9 @@ impl I18n {
             return msg.to_owned();
         };
 
-        let message = bundle.get_message(msg).expect("Failed to get message.");
+        let message = bundle
+            .get_message(msg)
+            .expect(&format!("Failed to get message: {}.", msg));
         let pattern = message.value().expect("Failed to get the message pattern.");
         let mut errors = vec![];
 
