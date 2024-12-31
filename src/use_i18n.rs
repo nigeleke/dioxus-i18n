@@ -1,10 +1,11 @@
-use std::path::PathBuf;
-
 use dioxus_lib::prelude::*;
 use fluent::{FluentArgs, FluentBundle, FluentResource};
-
 use unic_langid::LanguageIdentifier;
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::PathBuf;
+
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct Locale {
     id: LanguageIdentifier,
     resource: LocaleResource,
@@ -27,8 +28,39 @@ impl Locale {
     }
 }
 
+pub trait IntoLocale {
+    fn into_locale(self) -> Locale;
+}
+
+impl IntoLocale for Locale {
+    fn into_locale(self) -> Locale {
+        self
+    }
+}
+
+impl IntoLocale for (LanguageIdentifier, &'static str) {
+    fn into_locale(self) -> Locale {
+        Locale {
+            id: self.0,
+            resource: LocaleResource::Static(self.1),
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl IntoLocale for (LanguageIdentifier, PathBuf) {
+    fn into_locale(self) -> Locale {
+        Locale {
+            id: self.0,
+            resource: LocaleResource::Path(self.1),
+        }
+    }
+}
+
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum LocaleResource {
     Static(&'static str),
+    #[cfg(not(target_arch = "wasm32"))]
     Path(PathBuf),
 }
 
@@ -36,16 +68,15 @@ impl LocaleResource {
     pub fn to_string(&self) -> String {
         match self {
             Self::Static(str) => str.to_string(),
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Path(path) => {
-                #[cfg(target_arch = "wasm32")]
-                unreachable!("Dynamic locales are not supported in WASM");
-                #[cfg(not(target_arch = "wasm32"))]
                 std::fs::read_to_string(path).expect("Failed to read locale resource")
             }
         }
     }
 }
 
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct I18nConfig {
     id: LanguageIdentifier,
     fallback: Option<LanguageIdentifier>,
@@ -69,7 +100,11 @@ impl I18nConfig {
     }
 
     /// Add [Locale].
-    pub fn with_locale(mut self, locale: Locale) -> Self {
+    pub fn with_locale<T>(mut self, locale: T) -> Self
+    where
+        T: IntoLocale,
+    {
+        let locale = locale.into_locale();
         self.locales.push(locale);
         self
     }
@@ -168,4 +203,73 @@ impl I18n {
 
 pub fn i18n() -> I18n {
     consume_context()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn can_add_locale_to_config_deprecating() {
+        let lang_a = LanguageIdentifier::from_bytes("la-LA".as_bytes()).unwrap();
+        let lang_b = LanguageIdentifier::from_bytes("la-LB".as_bytes()).unwrap();
+        let lang_c = LanguageIdentifier::from_bytes("la-LC".as_bytes()).unwrap();
+        let config = I18nConfig::new(lang_a.clone())
+            .with_locale(Locale::new_static(lang_b.clone(), "lang = lang_b"))
+            .with_locale(Locale::new_dynamic(lang_c.clone(), PathBuf::new()));
+        assert_eq!(
+            config,
+            I18nConfig {
+                id: lang_a,
+                fallback: None,
+                locales: vec![
+                    Locale {
+                        id: lang_b,
+                        resource: LocaleResource::Static("lang = lang_b")
+                    },
+                    Locale {
+                        id: lang_c,
+                        resource: LocaleResource::Path(PathBuf::new())
+                    }
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn can_add_locale_string_to_config() {
+        let lang_a = LanguageIdentifier::from_bytes("la-LA".as_bytes()).unwrap();
+        let lang_b = LanguageIdentifier::from_bytes("la-LB".as_bytes()).unwrap();
+        let config = I18nConfig::new(lang_a.clone()).with_locale((lang_b.clone(), "lang = lang_b"));
+        assert_eq!(
+            config,
+            I18nConfig {
+                id: lang_a,
+                fallback: None,
+                locales: vec![Locale {
+                    id: lang_b,
+                    resource: LocaleResource::Static("lang = lang_b")
+                },]
+            }
+        );
+    }
+
+    #[test]
+    fn can_add_locale_pathbuf_to_config() {
+        let lang_a = LanguageIdentifier::from_bytes("la-LA".as_bytes()).unwrap();
+        let lang_c = LanguageIdentifier::from_bytes("la-LC".as_bytes()).unwrap();
+        let config = I18nConfig::new(lang_a.clone()).with_locale((lang_c.clone(), PathBuf::new()));
+        assert_eq!(
+            config,
+            I18nConfig {
+                id: lang_a,
+                fallback: None,
+                locales: vec![Locale {
+                    id: lang_c,
+                    resource: LocaleResource::Path(PathBuf::new())
+                }]
+            }
+        );
+    }
 }

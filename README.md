@@ -33,7 +33,7 @@ fn app() -> Element {
             ))
             .with_locale(Locale::new_dynamic( // Load at launch
                 langid!("es-ES"),
-                include_str!("./es-ES.ftl"),
+                PathBuf::from("./es-ES.ftl"),
             ))
     });
 
@@ -41,6 +41,15 @@ fn app() -> Element {
         label { { t!("hello", name: "World") } }
     )
 }
+```
+
+## Development
+
+```bash
+# Checks clean compile against `#[cfg(not(target_arch = "wasm32"))]`
+cargo build --target wasm32-unknown-unknown
+# Runs all tests
+cargo test
 ```
 
 [MIT License](./LICENSE.md)
