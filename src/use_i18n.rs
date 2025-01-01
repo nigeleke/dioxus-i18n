@@ -5,6 +5,7 @@ use unic_langid::LanguageIdentifier;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
+/// `Locale` is a "place-holder" around what will eventually be a `fluent::FluentBundle`
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct Locale {
     id: LanguageIdentifier,
@@ -12,6 +13,10 @@ pub struct Locale {
 }
 
 impl Locale {
+    #[deprecated(
+        since = "0.3.0",
+        note = "remove `Locale::new_static` and use `(lang_id, a_str)` instead"
+    )]
     pub fn new_static(id: LanguageIdentifier, str: &'static str) -> Self {
         Self {
             id,
@@ -19,6 +24,10 @@ impl Locale {
         }
     }
 
+    #[deprecated(
+        since = "0.3.0",
+        note = "remove `Locale::new_dynamic` and use `(lang_id, a_pathbuf)` instead"
+    )]
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new_dynamic(id: LanguageIdentifier, path: impl Into<PathBuf>) -> Self {
         Self {
@@ -57,6 +66,7 @@ impl IntoLocale for (LanguageIdentifier, PathBuf) {
     }
 }
 
+/// A `LocaleResource` can be static text, or dervied from a file. The file derivation is not supported for `wasm`.
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum LocaleResource {
     Static(&'static str),
@@ -76,10 +86,17 @@ impl LocaleResource {
     }
 }
 
+/// The configuration for `I18n`.
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct I18nConfig {
+    /// The initial value for [`I18n`][`set_language`]
     id: LanguageIdentifier,
+
+    /// The final fallback language if no other locales are found for `id`.
+    /// A `Locale` must exist in `locales' if `fallback` is defined.
     fallback: Option<LanguageIdentifier>,
+
+    /// The locales added to the configuration.
     locales: Vec<Locale>,
 }
 
@@ -216,8 +233,8 @@ mod test {
         let lang_b = LanguageIdentifier::from_bytes("la-LB".as_bytes()).unwrap();
         let lang_c = LanguageIdentifier::from_bytes("la-LC".as_bytes()).unwrap();
         let config = I18nConfig::new(lang_a.clone())
-            .with_locale(Locale::new_static(lang_b.clone(), "lang = lang_b"))
-            .with_locale(Locale::new_dynamic(lang_c.clone(), PathBuf::new()));
+            .with_locale((lang_b.clone(), "lang = lang_b"))
+            .with_locale((lang_c.clone(), PathBuf::new()));
         assert_eq!(
             config,
             I18nConfig {

@@ -27,6 +27,16 @@ hello = Hello, {$name}!
 fn app() -> Element {
     let i18 = use_init_i18n(|| {
         I18nConfig::new(langid!("en-US"))
+            // v0.4.0+
+            .with_locale(( // Embed
+                langid!("en-US"),
+                include_str!("./en-US.ftl")
+            ))
+            .with_locale(( // Load at launch
+                langid!("es-ES"),
+                PathBuf::from("./es-ES.ftl"),
+            ))
+            // v0.3.0 - old format; deprecated...
             .with_locale(Locale::new_static( // Embed
                 langid!("en-US"),
                 include_str!("./en-US.ftl"),
@@ -48,6 +58,7 @@ fn app() -> Element {
 ```bash
 # Checks clean compile against `#[cfg(not(target_arch = "wasm32"))]`
 cargo build --target wasm32-unknown-unknown
+
 # Runs all tests
 cargo test
 ```
