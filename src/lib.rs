@@ -38,6 +38,9 @@
 pub mod i18n_macro;
 pub mod use_i18n;
 
+#[cfg(test)]
+pub mod test_hook;
+
 pub use fluent;
 pub use unic_langid;
 

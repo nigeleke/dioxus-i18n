@@ -136,24 +136,7 @@ pub fn use_init_i18n(init: impl FnOnce() -> I18nConfig) -> I18n {
             locales,
         } = init();
 
-        let bundles = locales
-            .into_iter()
-            .map(|Locale { id, resource }| {
-                let mut bundle = FluentBundle::new(vec![id]);
-                let resource = FluentResource::try_new(resource.to_string())
-                    .expect("Failed to ceate Resource.");
-                bundle
-                    .add_resource(resource)
-                    .expect("Failed to add resource.");
-                bundle
-            })
-            .collect::<Vec<FluentBundle<FluentResource>>>();
-
-        I18n {
-            selected_language: Signal::new(id),
-            fallback_language: Signal::new(fallback),
-            bundles: Signal::new(bundles),
-        }
+        I18n::new(id, fallback, locales)
     })
 }
 
@@ -161,27 +144,27 @@ pub fn use_init_i18n(init: impl FnOnce() -> I18nConfig) -> I18n {
 pub struct I18n {
     selected_language: Signal<LanguageIdentifier>,
     fallback_language: Signal<Option<LanguageIdentifier>>,
-    bundles: Signal<Vec<FluentBundle<FluentResource>>>,
+    locales: Signal<Vec<Locale>>,
+    active_bundle: Signal<FluentBundle<FluentResource>>,
 }
 
 impl I18n {
+    pub fn new(
+        selected_language: LanguageIdentifier,
+        fallback_language: Option<LanguageIdentifier>,
+        locales: Vec<Locale>,
+    ) -> Self {
+        let bundle = create_bundle(&selected_language, &fallback_language, &locales);
+        Self {
+            selected_language: Signal::new(selected_language),
+            fallback_language: Signal::new(fallback_language),
+            locales: Signal::new(locales),
+            active_bundle: Signal::new(bundle),
+        }
+    }
+
     pub fn translate_with_args(&self, msg: &str, args: Option<&FluentArgs>) -> String {
-        let bundles = self.bundles.read();
-
-        let Some(bundle) = bundles
-            .iter()
-            .find(|bundle| bundle.locales.contains(&*self.selected_language.read()))
-            .or_else(|| {
-                if let Some(fcb) = &*self.fallback_language.read() {
-                    bundles.iter().find(|bundle| bundle.locales.contains(fcb))
-                } else {
-                    None
-                }
-            })
-        else {
-            return msg.to_owned();
-        };
-
+        let bundle = self.active_bundle.read();
         let message = bundle
             .get_message(msg)
             .expect(&format!("Failed to get message: {}.", msg));
@@ -210,12 +193,63 @@ impl I18n {
     /// Update the selected language.
     pub fn set_language(&mut self, id: LanguageIdentifier) {
         *self.selected_language.write() = id;
+        self.update_active_bundle();
     }
 
     /// Update the fallback language.
     pub fn set_fallback_language(&mut self, id: LanguageIdentifier) {
         *self.fallback_language.write() = Some(id);
+        self.update_active_bundle();
     }
+
+    fn update_active_bundle(&mut self) {
+        let bundle = create_bundle(
+            &self.selected_language.read(),
+            &self.fallback_language.read(),
+            &self.locales.read(),
+        );
+        self.active_bundle.set(bundle);
+    }
+}
+
+fn create_bundle(
+    selected_language: &LanguageIdentifier,
+    fallback_language: &Option<LanguageIdentifier>,
+    locales: &Vec<Locale>,
+) -> FluentBundle<FluentResource> {
+    let add_resource = |bundle: &mut FluentBundle<FluentResource>, locale: Option<&Locale>| {
+        if let Some(locale) = locale {
+            let resource = FluentResource::try_new(locale.resource.to_string())
+                .expect("Failed to ceate Resource.");
+            bundle.add_resource_overriding(resource);
+        }
+    };
+
+    let mut bundle = FluentBundle::new(vec![selected_language.clone()]);
+    if let Some(fallback_language) = fallback_language {
+        let resource = locales.iter().find(|l| l.id == *fallback_language);
+        add_resource(&mut bundle, resource);
+    }
+
+    let (language, script, region, variants) = selected_language.clone().into_parts();
+    let variants_lang = LanguageIdentifier::from_parts(language, script, region, &variants);
+    let region_lang = LanguageIdentifier::from_parts(language, script, region, &vec![]);
+    let script_lang = LanguageIdentifier::from_parts(language, script, None, &vec![]);
+    let language_lang = LanguageIdentifier::from_parts(language, None, None, &vec![]);
+
+    let resource = locales.iter().find(|l| l.id == language_lang);
+    add_resource(&mut bundle, resource);
+
+    let resource = locales.iter().find(|l| l.id == script_lang);
+    add_resource(&mut bundle, resource);
+
+    let resource = locales.iter().find(|l| l.id == region_lang);
+    add_resource(&mut bundle, resource);
+
+    let resource = locales.iter().find(|l| l.id == variants_lang);
+    add_resource(&mut bundle, resource);
+
+    bundle
 }
 
 pub fn i18n() -> I18n {
@@ -225,13 +259,15 @@ pub fn i18n() -> I18n {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::test_hook::*;
     use pretty_assertions::assert_eq;
+    use unic_langid::langid;
 
     #[test]
     fn can_add_locale_to_config_deprecating() {
-        let lang_a = LanguageIdentifier::from_bytes("la-LA".as_bytes()).unwrap();
-        let lang_b = LanguageIdentifier::from_bytes("la-LB".as_bytes()).unwrap();
-        let lang_c = LanguageIdentifier::from_bytes("la-LC".as_bytes()).unwrap();
+        let lang_a = langid!("la-LA");
+        let lang_b = langid!("la-LB");
+        let lang_c = langid!("la-LC");
         let config = I18nConfig::new(lang_a.clone())
             .with_locale((lang_b.clone(), "lang = lang_b"))
             .with_locale((lang_c.clone(), PathBuf::new()));
@@ -256,8 +292,8 @@ mod test {
 
     #[test]
     fn can_add_locale_string_to_config() {
-        let lang_a = LanguageIdentifier::from_bytes("la-LA".as_bytes()).unwrap();
-        let lang_b = LanguageIdentifier::from_bytes("la-LB".as_bytes()).unwrap();
+        let lang_a = langid!("la-LA");
+        let lang_b = langid!("la-LB");
         let config = I18nConfig::new(lang_a.clone()).with_locale((lang_b.clone(), "lang = lang_b"));
         assert_eq!(
             config,
@@ -274,8 +310,8 @@ mod test {
 
     #[test]
     fn can_add_locale_pathbuf_to_config() {
-        let lang_a = LanguageIdentifier::from_bytes("la-LA".as_bytes()).unwrap();
-        let lang_c = LanguageIdentifier::from_bytes("la-LC".as_bytes()).unwrap();
+        let lang_a = langid!("la-LA");
+        let lang_c = langid!("la-LC");
         let config = I18nConfig::new(lang_a.clone()).with_locale((lang_c.clone(), PathBuf::new()));
         assert_eq!(
             config,
@@ -287,6 +323,52 @@ mod test {
                     resource: LocaleResource::Path(PathBuf::new())
                 }]
             }
+        );
+    }
+
+    // WARNING: This test passes even when asserts fail...
+    //
+    #[test]
+    fn will_perform_graceful_fallback() {
+        test_hook(
+            || {
+                let fallback_lang = langid!("fb-FB");
+                let language_lang = langid!("la");
+                let script_lang = langid!("la-Scpt");
+                let region_lang = langid!("la-Scpt-LA");
+                let variants_lang = langid!("la-Scpt-LA-variants");
+                let config = I18nConfig::new(variants_lang.clone())
+                    .with_locale((
+                        language_lang.clone(),
+                        include_str!("../tests/data/fallback/la.ftl"),
+                    ))
+                    .with_locale((
+                        script_lang,
+                        include_str!("../tests/data/fallback/la-Scpt.ftl"),
+                    ))
+                    .with_locale((
+                        region_lang,
+                        include_str!("../tests/data/fallback/la-Scpt-LA.ftl"),
+                    ))
+                    .with_locale((
+                        variants_lang,
+                        include_str!("../tests/data/fallback/la-Scpt-LA-variants.ftl"),
+                    ))
+                    .with_locale((
+                        fallback_lang.clone(),
+                        include_str!("../tests/data/fallback/fb-FB.ftl"),
+                    ))
+                    .with_fallback(fallback_lang);
+                use_init_i18n(|| config)
+            },
+            |value, _proxy| {
+                assert_eq!(value.translate("variants"), "variants only");
+                assert_eq!(value.translate("region"), "region only");
+                assert_eq!(value.translate("script"), "script only");
+                assert_eq!(value.translate("language"), "language only");
+                assert_eq!(value.translate("fallback"), "fallback only");
+            },
+            |proxy| assert_eq!(proxy.generation, 1),
         );
     }
 }

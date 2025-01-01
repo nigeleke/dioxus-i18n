@@ -1773,6 +1773,7 @@ dependencies = [
  "dioxus-lib 0.6.1",
  "fluent",
  "freya",
+ "futures",
  "pretty_assertions",
  "unic-langid",
 ]

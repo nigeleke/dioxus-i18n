@@ -21,5 +21,6 @@ unic-langid = { version = "0.9.5", features = ["macros"] }
 [dev-dependencies]
 dioxus = { version = "0.6", features = ["desktop"] }
 freya = "0.2"
+futures = "0.3.31"
 pretty_assertions = "1.4.1"
 unic-langid = { version = "0.9.5", features = ["macros"] }
