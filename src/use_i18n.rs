@@ -181,7 +181,7 @@ impl I18n {
     }
 
     /// Get the selected language.
-    pub fn language(&mut self) -> LanguageIdentifier {
+    pub fn language(&self) -> LanguageIdentifier {
         self.selected_language.read().clone()
     }
 
@@ -339,7 +339,8 @@ mod test {
     fn can_add_locale_pathbuf_to_config() {
         let lang_a = langid!("la-LA");
         let lang_c = langid!("la-LC");
-        let config = I18nConfig::new(lang_a.clone()).with_locale((lang_c.clone(), PathBuf::new()));
+        let config = I18nConfig::new(lang_a.clone())
+            .with_locale((lang_c.clone(), PathBuf::from("./test/data/fallback/la.ftl")));
         assert_eq!(
             config,
             I18nConfig {
@@ -347,7 +348,7 @@ mod test {
                 fallback: None,
                 locales: vec![Locale {
                     id: lang_c,
-                    resource: LocaleResource::Path(PathBuf::new())
+                    resource: LocaleResource::Path(PathBuf::from("./test/data/fallback/la.ftl"))
                 }]
             }
         );

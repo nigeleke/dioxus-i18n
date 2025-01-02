@@ -1,94 +1,64 @@
-use dioxus::{dioxus_core::NoOpMutations, prelude::*};
+mod common;
+use common::*;
+
 use dioxus_i18n::prelude::{use_init_i18n, I18n, I18nConfig};
-use futures::FutureExt;
 use unic_langid::{langid, LanguageIdentifier};
 
-use std::{
-    cell::{LazyCell, RefCell},
-    rc::Rc,
-};
-
-//*****************************************************************************
-//
-// This set of tests takes a heavy handed approach to errors, whereby the
-// process is exited. This is done because panic! and assert_eq! failures
-// are trapped within `dioxus::runtime::RuntimeGuard`.
-//
-//*****************************************************************************
+use std::cell::LazyCell;
 
 #[test]
 fn exact_locale_match_will_use_translation() {
-    test_hook(
-        i18n,
-        |value, _proxy| {
-            assert_and_force_exit_if_false(
-                "exact_locale_match_will_use_translation",
-                &value.translate("variants"),
-                "variants only",
-            );
-        },
-        |_| {},
-    );
+    test_hook(i18n, |value, proxy| {
+        proxy.assert(
+            &value.translate("variants"),
+            "variants only",
+            "exact_locale_match_will_use_translation",
+        );
+    });
 }
 
 #[test]
 fn non_exact_locale_match_will_use_region() {
-    test_hook(
-        i18n,
-        |value, _proxy| {
-            assert_and_force_exit_if_false(
-                "non_exact_locale_match_will_use_region",
-                &value.translate("region"),
-                "region only",
-            );
-        },
-        |_| {},
-    );
+    test_hook(i18n, |value, proxy| {
+        proxy.assert(
+            &value.translate("region"),
+            "region only",
+            "non_exact_locale_match_will_use_region",
+        );
+    });
 }
 
 #[test]
 fn non_exact_locale_match_will_use_script() {
-    test_hook(
-        i18n,
-        |value, _proxy| {
-            assert_and_force_exit_if_false(
-                "non_exact_locale_match_will_use_script",
-                &value.translate("script"),
-                "script only",
-            );
-        },
-        |_| {},
-    );
+    test_hook(i18n, |value, proxy| {
+        proxy.assert(
+            &value.translate("script"),
+            "script only",
+            "non_exact_locale_match_will_use_script",
+        );
+    });
 }
 
 #[test]
 fn non_exact_locale_match_will_use_language() {
-    test_hook(
-        i18n,
-        |value, _proxy| {
-            assert_and_force_exit_if_false(
-                "non_exact_locale_match_will_use_language",
-                &value.translate("language"),
-                "language only",
-            );
-        },
-        |_| {},
-    );
+    test_hook(i18n, |value, proxy| {
+        proxy.assert(
+            &value.translate("language"),
+            "language only",
+            "non_exact_locale_match_will_use_language",
+        );
+    });
 }
 
 #[test]
 fn no_locale_match_will_use_fallback() {
-    test_hook(
-        i18n,
-        |value, _proxy| {
-            assert_and_force_exit_if_false(
-                "no_locale_match_will_use_fallback",
-                &value.translate("fallback"),
-                "fallback only",
-            );
-        },
-        |_| {},
-    );
+    test_hook(i18n, |value, proxy| {
+        proxy.assert(
+            &value.translate("fallback"),
+            "fallback only",
+            "no_locale_match_will_use_fallback",
+        );
+    });
 }
 
 const FALLBACK_LANG: LanguageIdentifier = langid!("fb-FB");
@@ -119,82 +89,4 @@ fn i18n() -> I18n {
         ))
         .with_fallback(FALLBACK_LANG);
     use_init_i18n(|| config)
-}
-
-fn assert_and_force_exit_if_false(fn_name: &str, actual: &str, expected: &str) {
-    if actual != expected {
-        eprintln!(
-            "\n***** FAIL {} *****: {actual:?} != {expected:?}\n",
-            fn_name.to_uppercase()
-        );
-        std::process::exit(-1);
-    }
-}
-
-// Lifted from: https://dioxuslabs.com/learn/0.6/cookbook/testing
-// Curtailed MockProxy implmentation.
-//
-fn test_hook<V: 'static>(
-    initialize: impl FnMut() -> V + 'static,
-    check: impl FnMut(V, MockProxy) + 'static,
-    mut final_check: impl FnMut(MockProxy) + 'static,
-) {
-    #[derive(Props)]
-    struct MockAppComponent<I: 'static, C: 'static> {
-        hook: Rc<RefCell<I>>,
-        check: Rc<RefCell<C>>,
-    }
-
-    impl<I, C> PartialEq for MockAppComponent<I, C> {
-        fn eq(&self, _: &Self) -> bool {
-            true
-        }
-    }
-
-    impl<I, C> Clone for MockAppComponent<I, C> {
-        fn clone(&self) -> Self {
-            Self {
-                hook: self.hook.clone(),
-                check: self.check.clone(),
-            }
-        }
-    }
-
-    fn mock_app<I: FnMut() -> V, C: FnMut(V, MockProxy), V>(
-        props: MockAppComponent<I, C>,
-    ) -> Element {
-        let value = props.hook.borrow_mut()();
-
-        props.check.borrow_mut()(value, MockProxy::new());
-
-        rsx! { div {} }
-    }
-
-    let mut vdom = VirtualDom::new_with_props(
-        mock_app,
-        MockAppComponent {
-            hook: Rc::new(RefCell::new(initialize)),
-            check: Rc::new(RefCell::new(check)),
-        },
-    );
-
-    vdom.rebuild_in_place();
-
-    while vdom.wait_for_work().now_or_never().is_some() {
-        vdom.render_immediate(&mut NoOpMutations);
-    }
-
-    vdom.in_runtime(|| {
-        ScopeId::ROOT.in_runtime(|| {
-            final_check(MockProxy::new());
-        })
-    })
-}
-
-struct MockProxy {}
-
-impl MockProxy {
-    fn new() -> Self {
-        Self {}
-    }
 }
