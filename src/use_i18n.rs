@@ -75,7 +75,7 @@ pub enum LocaleResource {
 }
 
 impl LocaleResource {
-    pub fn to_string(&self) -> String {
+    pub fn to_resource_string(&self) -> String {
         match self {
             Self::Static(str) => str.to_string(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -167,7 +167,7 @@ impl I18n {
         let bundle = self.active_bundle.read();
         let message = bundle
             .get_message(msg)
-            .expect(&format!("Failed to get message: {}.", msg));
+            .unwrap_or_else(|| panic!("Failed to get message: {}.", msg));
         let pattern = message.value().expect("Failed to get the message pattern.");
         let mut errors = vec![];
 
@@ -215,11 +215,11 @@ impl I18n {
 fn create_bundle(
     selected_language: &LanguageIdentifier,
     fallback_language: &Option<LanguageIdentifier>,
-    locales: &Vec<Locale>,
+    locales: &[Locale],
 ) -> FluentBundle<FluentResource> {
     let add_resource = |bundle: &mut FluentBundle<FluentResource>, locale: Option<&Locale>| {
         if let Some(locale) = locale {
-            let resource = FluentResource::try_new(locale.resource.to_string())
+            let resource = FluentResource::try_new(locale.resource.to_resource_string())
                 .expect("Failed to ceate Resource.");
             bundle.add_resource_overriding(resource);
         }
@@ -233,9 +233,9 @@ fn create_bundle(
 
     let (language, script, region, variants) = selected_language.clone().into_parts();
     let variants_lang = LanguageIdentifier::from_parts(language, script, region, &variants);
-    let region_lang = LanguageIdentifier::from_parts(language, script, region, &vec![]);
-    let script_lang = LanguageIdentifier::from_parts(language, script, None, &vec![]);
-    let language_lang = LanguageIdentifier::from_parts(language, None, None, &vec![]);
+    let region_lang = LanguageIdentifier::from_parts(language, script, region, &[]);
+    let script_lang = LanguageIdentifier::from_parts(language, script, None, &[]);
+    let language_lang = LanguageIdentifier::from_parts(language, None, None, &[]);
 
     let resource = locales.iter().find(|l| l.id == language_lang);
     add_resource(&mut bundle, resource);

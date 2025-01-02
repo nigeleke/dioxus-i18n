@@ -26,6 +26,8 @@
 
   __Note:__ this is a breaking change which may impact the selected translation.
 
+- `LocaleResource::to_string` renamed to `LocaleResource::to_resource_string`
+
 ## [0.3.0] 2025-12-10
 
 ### Updated
