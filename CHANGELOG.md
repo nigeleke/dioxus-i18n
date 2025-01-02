@@ -14,6 +14,9 @@
   `(LanguageIdentifer, PathBuf)`.
   The explicit constructors have been flagged as deprecated.
 
+- Enabled shared 'LocaleResource's, where two dialect can use the same translation file.
+  For example ["en", "en-GB"] share "en-GB.ftl".
+
 ### Changed
 
 - The translations used are determined when `I18n::set_language` or

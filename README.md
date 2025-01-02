@@ -36,6 +36,10 @@ fn app() -> Element {
                 langid!("es-ES"),
                 PathBuf::from("./es-ES.ftl"),
             ))
+            .with_locale((     // Locales will share duplicated locale_resources
+                langid!("en"), // which is useful to assign a specific region for
+                include_str!("./en-US.ftl") // the primary language
+            ))
             // v0.3.0 - old format; deprecated...
             .with_locale(Locale::new_static( // Embed
                 langid!("en-US"),

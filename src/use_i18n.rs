@@ -2,6 +2,8 @@ use dioxus_lib::prelude::*;
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use unic_langid::LanguageIdentifier;
 
+use std::collections::HashMap;
+
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
@@ -48,7 +50,8 @@ where
 }
 
 /// A `LocaleResource` can be static text, or dervied from a file. The file derivation is not supported for `wasm`.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
+// #[cfg_attr(test, derive(Debug)]
 pub enum LocaleResource {
     Static(&'static str),
     #[cfg(not(target_arch = "wasm32"))]
@@ -90,8 +93,11 @@ pub struct I18nConfig {
     /// A `Locale` must exist in `locales' if `fallback` is defined.
     fallback: Option<LanguageIdentifier>,
 
+    /// The locale_resources added to the configuration.
+    locale_resources: Vec<LocaleResource>,
+
     /// The locales added to the configuration.
-    locales: Vec<Locale>,
+    locales: HashMap<LanguageIdentifier, usize>,
 }
 
 impl I18nConfig {
@@ -100,7 +106,8 @@ impl I18nConfig {
         Self {
             id,
             fallback: None,
-            locales: Vec::new(),
+            locale_resources: Vec::new(),
+            locales: HashMap::new(),
         }
     }
 
@@ -111,12 +118,27 @@ impl I18nConfig {
     }
 
     /// Add [Locale].
+    /// It is possible to share locales resources. If this locale's resource
+    /// matches a previously added one, then this locale will use the existing one.
+    /// This is primarily for the static locale_resources to avoid string duplication.
     pub fn with_locale<T>(mut self, locale: T) -> Self
     where
         T: Into<Locale>,
     {
         let locale = locale.into();
-        self.locales.push(locale);
+        let locale_resources_len = self.locale_resources.len();
+
+        let index = self
+            .locale_resources
+            .iter()
+            .position(|r| *r == locale.resource)
+            .unwrap_or(locale_resources_len);
+
+        if index == locale_resources_len {
+            self.locale_resources.push(locale.resource)
+        };
+
+        self.locales.insert(locale.id, index);
         self
     }
 }
@@ -128,10 +150,11 @@ pub fn use_init_i18n(init: impl FnOnce() -> I18nConfig) -> I18n {
         let I18nConfig {
             id,
             fallback,
+            locale_resources,
             locales,
         } = init();
 
-        I18n::new(id, fallback, locales)
+        I18n::new(id, fallback, locale_resources, locales)
     })
 }
 
@@ -139,7 +162,8 @@ pub fn use_init_i18n(init: impl FnOnce() -> I18nConfig) -> I18n {
 pub struct I18n {
     selected_language: Signal<LanguageIdentifier>,
     fallback_language: Signal<Option<LanguageIdentifier>>,
-    locales: Signal<Vec<Locale>>,
+    locale_resources: Signal<Vec<LocaleResource>>,
+    locales: Signal<HashMap<LanguageIdentifier, usize>>,
     active_bundle: Signal<FluentBundle<FluentResource>>,
 }
 
@@ -147,12 +171,19 @@ impl I18n {
     pub fn new(
         selected_language: LanguageIdentifier,
         fallback_language: Option<LanguageIdentifier>,
-        locales: Vec<Locale>,
+        locale_resources: Vec<LocaleResource>,
+        locales: HashMap<LanguageIdentifier, usize>,
     ) -> Self {
-        let bundle = create_bundle(&selected_language, &fallback_language, &locales);
+        let bundle = create_bundle(
+            &selected_language,
+            &fallback_language,
+            &locale_resources,
+            &locales,
+        );
         Self {
             selected_language: Signal::new(selected_language),
             fallback_language: Signal::new(fallback_language),
+            locale_resources: Signal::new(locale_resources),
             locales: Signal::new(locales),
             active_bundle: Signal::new(bundle),
         }
@@ -201,6 +232,7 @@ impl I18n {
         let bundle = create_bundle(
             &self.selected_language.read(),
             &self.fallback_language.read(),
+            &self.locale_resources.read(),
             &self.locales.read(),
         );
         self.active_bundle.set(bundle);
@@ -210,11 +242,15 @@ impl I18n {
 fn create_bundle(
     selected_language: &LanguageIdentifier,
     fallback_language: &Option<LanguageIdentifier>,
-    locales: &[Locale],
+    locale_resources: &Vec<LocaleResource>,
+    locales: &HashMap<LanguageIdentifier, usize>,
 ) -> FluentBundle<FluentResource> {
-    let add_resource = |bundle: &mut FluentBundle<FluentResource>, locale: Option<&Locale>| {
-        if let Some(locale) = locale {
-            let resource = FluentResource::try_new(locale.resource.to_resource_string())
+    let add_resource = move |bundle: &mut FluentBundle<FluentResource>,
+                             langid: &LanguageIdentifier,
+                             locale_resources: &[LocaleResource]| {
+        if let Some(&i) = locales.get(&langid) {
+            let resource = &locale_resources[i];
+            let resource = FluentResource::try_new(resource.to_resource_string())
                 .expect("Failed to ceate Resource.");
             bundle.add_resource_overriding(resource);
         }
@@ -222,8 +258,7 @@ fn create_bundle(
 
     let mut bundle = FluentBundle::new(vec![selected_language.clone()]);
     if let Some(fallback_language) = fallback_language {
-        let resource = locales.iter().find(|l| l.id == *fallback_language);
-        add_resource(&mut bundle, resource);
+        add_resource(&mut bundle, &fallback_language, locale_resources);
     }
 
     let (language, script, region, variants) = selected_language.clone().into_parts();
@@ -232,17 +267,10 @@ fn create_bundle(
     let script_lang = LanguageIdentifier::from_parts(language, script, None, &[]);
     let language_lang = LanguageIdentifier::from_parts(language, None, None, &[]);
 
-    let resource = locales.iter().find(|l| l.id == language_lang);
-    add_resource(&mut bundle, resource);
-
-    let resource = locales.iter().find(|l| l.id == script_lang);
-    add_resource(&mut bundle, resource);
-
-    let resource = locales.iter().find(|l| l.id == region_lang);
-    add_resource(&mut bundle, resource);
-
-    let resource = locales.iter().find(|l| l.id == variants_lang);
-    add_resource(&mut bundle, resource);
+    add_resource(&mut bundle, &language_lang, locale_resources);
+    add_resource(&mut bundle, &script_lang, locale_resources);
+    add_resource(&mut bundle, &region_lang, locale_resources);
+    add_resource(&mut bundle, &variants_lang, locale_resources);
 
     bundle
 }
@@ -260,91 +288,132 @@ mod test {
     #[allow(deprecated)]
     #[test]
     fn can_add_locale_to_config_deprecating() {
-        let lang_a = langid!("la-LA");
-        let lang_b = langid!("la-LB");
-        let lang_c = langid!("la-LC");
-        let config = I18nConfig::new(lang_a.clone())
-            .with_locale(Locale::new_static(lang_b.clone(), "lang = lang_b"))
-            .with_locale(Locale::new_dynamic(lang_c.clone(), PathBuf::new()));
+        const LANG_A: LanguageIdentifier = langid!("la-LA");
+        const LANG_B: LanguageIdentifier = langid!("la-LB");
+        const LANG_C: LanguageIdentifier = langid!("la-LC");
+
+        let config = I18nConfig::new(LANG_A)
+            .with_locale(Locale::new_static(LANG_B, "lang = lang_b"))
+            .with_locale(Locale::new_dynamic(LANG_C, PathBuf::new()));
+
         assert_eq!(
             config,
             I18nConfig {
-                id: lang_a,
+                id: LANG_A,
                 fallback: None,
-                locales: vec![
-                    Locale {
-                        id: lang_b,
-                        resource: LocaleResource::Static("lang = lang_b")
-                    },
-                    Locale {
-                        id: lang_c,
-                        resource: LocaleResource::Path(PathBuf::new())
-                    }
-                ]
+                locale_resources: vec![
+                    LocaleResource::Static("lang = lang_b"),
+                    LocaleResource::Path(PathBuf::new()),
+                ],
+                locales: HashMap::from([(LANG_B, 0), (LANG_C, 1)]),
             }
         );
     }
 
     #[test]
     fn can_add_locale_to_config_v0_4_0() {
-        let lang_a = langid!("la-LA");
-        let lang_b = langid!("la-LB");
-        let lang_c = langid!("la-LC");
-        let config = I18nConfig::new(lang_a.clone())
-            .with_locale((lang_b.clone(), "lang = lang_b"))
-            .with_locale((lang_c.clone(), PathBuf::new()));
+        const LANG_A: LanguageIdentifier = langid!("la-LA");
+        const LANG_B: LanguageIdentifier = langid!("la-LB");
+        const LANG_C: LanguageIdentifier = langid!("la-LC");
+
+        let config = I18nConfig::new(LANG_A)
+            .with_locale((LANG_B, "lang = lang_b"))
+            .with_locale((LANG_C, PathBuf::new()));
+
         assert_eq!(
             config,
             I18nConfig {
-                id: lang_a,
+                id: LANG_A,
                 fallback: None,
-                locales: vec![
-                    Locale {
-                        id: lang_b,
-                        resource: LocaleResource::Static("lang = lang_b")
-                    },
-                    Locale {
-                        id: lang_c,
-                        resource: LocaleResource::Path(PathBuf::new())
-                    }
-                ]
+                locale_resources: vec![
+                    LocaleResource::Static("lang = lang_b"),
+                    LocaleResource::Path(PathBuf::new())
+                ],
+                locales: HashMap::from([(LANG_B, 0), (LANG_C, 1)]),
             }
         );
     }
 
     #[test]
     fn can_add_locale_string_to_config() {
-        let lang_a = langid!("la-LA");
-        let lang_b = langid!("la-LB");
-        let config = I18nConfig::new(lang_a.clone()).with_locale((lang_b.clone(), "lang = lang_b"));
+        const LANG_A: LanguageIdentifier = langid!("la-LA");
+        const LANG_B: LanguageIdentifier = langid!("la-LB");
+
+        let config = I18nConfig::new(LANG_A).with_locale((LANG_B, "lang = lang_b"));
+
         assert_eq!(
             config,
             I18nConfig {
-                id: lang_a,
+                id: LANG_A,
                 fallback: None,
-                locales: vec![Locale {
-                    id: lang_b,
-                    resource: LocaleResource::Static("lang = lang_b")
-                },]
+                locale_resources: vec![LocaleResource::Static("lang = lang_b")],
+                locales: HashMap::from([(LANG_B, 0)]),
+            }
+        );
+    }
+
+    #[test]
+    fn can_add_shared_locale_string_to_config() {
+        const LANG_A: LanguageIdentifier = langid!("la-LA");
+        const LANG_B: LanguageIdentifier = langid!("la-LB");
+        const LANG_C: LanguageIdentifier = langid!("la-LC");
+
+        let shared_string = "lang = a language";
+        let config = I18nConfig::new(LANG_A)
+            .with_locale((LANG_B, shared_string))
+            .with_locale((LANG_C, shared_string));
+
+        assert_eq!(
+            config,
+            I18nConfig {
+                id: LANG_A,
+                fallback: None,
+                locale_resources: vec![LocaleResource::Static(shared_string)],
+                locales: HashMap::from([(LANG_B, 0), (LANG_C, 0)]),
             }
         );
     }
 
     #[test]
     fn can_add_locale_pathbuf_to_config() {
-        let lang_a = langid!("la-LA");
-        let lang_c = langid!("la-LC");
-        let config = I18nConfig::new(lang_a.clone())
-            .with_locale((lang_c.clone(), PathBuf::from("./test/data/fallback/la.ftl")));
+        const LANG_A: LanguageIdentifier = langid!("la-LA");
+        const LANG_C: LanguageIdentifier = langid!("la-LC");
+
+        let config = I18nConfig::new(LANG_A)
+            .with_locale((LANG_C, PathBuf::from("./test/data/fallback/la.ftl")));
+
         assert_eq!(
             config,
             I18nConfig {
-                id: lang_a,
+                id: LANG_A,
                 fallback: None,
-                locales: vec![Locale {
-                    id: lang_c,
-                    resource: LocaleResource::Path(PathBuf::from("./test/data/fallback/la.ftl"))
-                }]
+                locale_resources: vec![LocaleResource::Path(PathBuf::from(
+                    "./test/data/fallback/la.ftl"
+                ))],
+                locales: HashMap::from([(LANG_C, 0)]),
+            }
+        );
+    }
+
+    #[test]
+    fn can_add_shared_locale_pathbuf_to_config() {
+        const LANG_A: LanguageIdentifier = langid!("la-LA");
+        const LANG_B: LanguageIdentifier = langid!("la-LB");
+        const LANG_C: LanguageIdentifier = langid!("la-LC");
+
+        let shared_pathbuf = PathBuf::from("./test/data/fallback/la.ftl");
+
+        let config = I18nConfig::new(LANG_A)
+            .with_locale((LANG_B, shared_pathbuf.clone()))
+            .with_locale((LANG_C, shared_pathbuf.clone()));
+
+        assert_eq!(
+            config,
+            I18nConfig {
+                id: LANG_A,
+                fallback: None,
+                locale_resources: vec![LocaleResource::Path(shared_pathbuf)],
+                locales: HashMap::from([(LANG_B, 0), (LANG_C, 0)]),
             }
         );
     }
