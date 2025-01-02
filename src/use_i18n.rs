@@ -259,7 +259,6 @@ pub fn i18n() -> I18n {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test_hook::*;
     use pretty_assertions::assert_eq;
     use unic_langid::langid;
 
@@ -323,52 +322,6 @@ mod test {
                     resource: LocaleResource::Path(PathBuf::new())
                 }]
             }
-        );
-    }
-
-    // WARNING: This test passes even when asserts fail...
-    //
-    #[test]
-    fn will_perform_graceful_fallback() {
-        test_hook(
-            || {
-                let fallback_lang = langid!("fb-FB");
-                let language_lang = langid!("la");
-                let script_lang = langid!("la-Scpt");
-                let region_lang = langid!("la-Scpt-LA");
-                let variants_lang = langid!("la-Scpt-LA-variants");
-                let config = I18nConfig::new(variants_lang.clone())
-                    .with_locale((
-                        language_lang.clone(),
-                        include_str!("../tests/data/fallback/la.ftl"),
-                    ))
-                    .with_locale((
-                        script_lang,
-                        include_str!("../tests/data/fallback/la-Scpt.ftl"),
-                    ))
-                    .with_locale((
-                        region_lang,
-                        include_str!("../tests/data/fallback/la-Scpt-LA.ftl"),
-                    ))
-                    .with_locale((
-                        variants_lang,
-                        include_str!("../tests/data/fallback/la-Scpt-LA-variants.ftl"),
-                    ))
-                    .with_locale((
-                        fallback_lang.clone(),
-                        include_str!("../tests/data/fallback/fb-FB.ftl"),
-                    ))
-                    .with_fallback(fallback_lang);
-                use_init_i18n(|| config)
-            },
-            |value, _proxy| {
-                assert_eq!(value.translate("variants"), "variants only");
-                assert_eq!(value.translate("region"), "region only");
-                assert_eq!(value.translate("script"), "script only");
-                assert_eq!(value.translate("language"), "language only");
-                assert_eq!(value.translate("fallback"), "fallback only");
-            },
-            |proxy| assert_eq!(proxy.generation, 1),
         );
     }
 }
