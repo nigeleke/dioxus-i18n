@@ -33,10 +33,76 @@ fn translate_from_dynamic_source() {
     });
 }
 
+#[test]
+fn initial_language_is_set() {
+    test_hook(i18n_from_static, |value, proxy| {
+        proxy.assert(
+            &value.language().to_string(),
+            &EN.to_string(),
+            "initial_language_is_set",
+        );
+    });
+}
+
+#[test]
+fn language_can_be_set() {
+    test_hook(i18n_from_static, |mut value, proxy| {
+        value.set_language(JP);
+        proxy.assert(
+            &value.language().to_string(),
+            &JP.to_string(),
+            "language_can_be_set",
+        );
+    });
+}
+
+#[test]
+fn no_default_fallback_language() {
+    test_hook(i18n_from_static, |value, proxy| {
+        proxy.assert(
+            &format!("{:?}", value.fallback_language()),
+            "None",
+            "no_default_fallback_language",
+        );
+    });
+}
+
+#[test]
+fn some_default_fallback_language() {
+    test_hook(i18n_from_static_with_fallback, |value, proxy| {
+        proxy.assert(
+            &format!("{:?}", value.fallback_language().map(|l| l.to_string())),
+            "Some(\"jp\")",
+            "some_default_fallback_language",
+        );
+    });
+}
+
+#[test]
+fn fallback_language_can_be_set() {
+    test_hook(i18n_from_static_with_fallback, |mut value, proxy| {
+        value.set_fallback_language(DE);
+        proxy.assert(
+            &format!("{:?}", value.fallback_language().map(|l| l.to_string())),
+            "Some(\"de\")",
+            "fallback_language_can_be_set",
+        );
+    });
+}
+
+const DE: LanguageIdentifier = langid!("de");
 const EN: LanguageIdentifier = langid!("en");
+const JP: LanguageIdentifier = langid!("jp");
 
 fn i18n_from_static() -> I18n {
     let config = I18nConfig::new(EN).with_locale((EN, include_str!("./data/i18n/en.ftl")));
+    use_init_i18n(|| config)
+}
+
+fn i18n_from_static_with_fallback() -> I18n {
+    let config = I18nConfig::new(EN)
+        .with_locale((EN, include_str!("./data/i18n/en.ftl")))
+        .with_fallback(JP);
     use_init_i18n(|| config)
 }
 

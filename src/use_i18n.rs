@@ -186,7 +186,7 @@ impl I18n {
     }
 
     /// Get the fallback language.
-    pub fn fallback_language(&mut self) -> Option<LanguageIdentifier> {
+    pub fn fallback_language(&self) -> Option<LanguageIdentifier> {
         self.fallback_language.read().clone()
     }
 

@@ -41,7 +41,6 @@ pub(crate) fn test_hook<V: 'static>(
         let mut assertions = Assertions::new();
 
         props.check.borrow_mut()(value, &mut assertions);
-        dioxus::logger::tracing::info!("{:?}", assertions);
         assertions.exit_on_errors();
 
         rsx! { div {} }
