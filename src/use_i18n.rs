@@ -15,7 +15,7 @@ pub struct Locale {
 impl Locale {
     #[deprecated(
         since = "0.3.0",
-        note = "remove `Locale::new_static` and use `(lang_id, a_str)` instead"
+        note = "remove `Locale::new_static` and use `(lang_id, a_str)` directly"
     )]
     pub fn new_static(id: LanguageIdentifier, str: &'static str) -> Self {
         Self {
@@ -26,7 +26,7 @@ impl Locale {
 
     #[deprecated(
         since = "0.3.0",
-        note = "remove `Locale::new_dynamic` and use `(lang_id, a_pathbuf)` instead"
+        note = "remove `Locale::new_dynamic` and use `(lang_id, a_pathbuf)` directly"
     )]
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new_dynamic(id: LanguageIdentifier, path: impl Into<PathBuf>) -> Self {
@@ -37,32 +37,13 @@ impl Locale {
     }
 }
 
-pub trait IntoLocale {
-    fn into_locale(self) -> Locale;
-}
-
-impl IntoLocale for Locale {
-    fn into_locale(self) -> Locale {
-        self
-    }
-}
-
-impl IntoLocale for (LanguageIdentifier, &'static str) {
-    fn into_locale(self) -> Locale {
-        Locale {
-            id: self.0,
-            resource: LocaleResource::Static(self.1),
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl IntoLocale for (LanguageIdentifier, PathBuf) {
-    fn into_locale(self) -> Locale {
-        Locale {
-            id: self.0,
-            resource: LocaleResource::Path(self.1),
-        }
+impl<T> From<(LanguageIdentifier, T)> for Locale
+where
+    T: Into<LocaleResource>,
+{
+    fn from((id, resource): (LanguageIdentifier, T)) -> Self {
+        let resource = resource.into();
+        Self { id, resource }
     }
 }
 
@@ -83,6 +64,19 @@ impl LocaleResource {
                 std::fs::read_to_string(path).expect("Failed to read locale resource")
             }
         }
+    }
+}
+
+impl From<&'static str> for LocaleResource {
+    fn from(value: &'static str) -> Self {
+        Self::Static(value)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<PathBuf> for LocaleResource {
+    fn from(value: PathBuf) -> Self {
+        Self::Path(value)
     }
 }
 
@@ -119,9 +113,9 @@ impl I18nConfig {
     /// Add [Locale].
     pub fn with_locale<T>(mut self, locale: T) -> Self
     where
-        T: IntoLocale,
+        T: Into<Locale>,
     {
-        let locale = locale.into_locale();
+        let locale = locale.into();
         self.locales.push(locale);
         self
     }
