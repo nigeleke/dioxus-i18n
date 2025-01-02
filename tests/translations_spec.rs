@@ -22,6 +22,20 @@ fn translate_from_static_source() {
 }
 
 #[test]
+fn failed_to_translate_with_invalid_key() {
+    test_hook(i18n_from_static, |_, proxy| {
+        let panic = std::panic::catch_unwind(|| {
+            let _ = &t!("invalid");
+        });
+        proxy.assert(
+            &panic.is_err().to_string(),
+            "true",
+            "failed_to_translate_with_invalid_key",
+        );
+    });
+}
+
+#[test]
 fn translate_from_dynamic_source() {
     test_hook(i18n_from_dynamic, |_, proxy| {
         let name = "World";

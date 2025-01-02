@@ -130,6 +130,7 @@ impl I18nConfig {
 /// Initialize an i18n provider.
 pub fn use_init_i18n(init: impl FnOnce() -> I18nConfig) -> I18n {
     use_context_provider(move || {
+        // Coverage false -ve: See https://github.com/xd009642/tarpaulin/issues/1675
         let I18nConfig {
             id,
             fallback,
