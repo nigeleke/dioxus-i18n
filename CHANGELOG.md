@@ -1,11 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0]
 
 ### Added
-- Doc comments
 
-- Module tests for `cargo test`
+- Code:
+  - Doc comments
+  - Module tests for `cargo test`
 
 - Amended `I18nConfig::with_locale` so that the `Locale` dynamic or static
   constructors no longer have to be _explicitly_ given.
@@ -28,7 +29,33 @@
 
 - `LocaleResource::to_string` renamed to `LocaleResource::to_resource_string`
 
-## [0.3.0] 2025-12-10
+## [0.3.0] 2024-12-10
 
-### Updated
-- Support for [Dioxus v0.6](https://dioxuslabs.com/)
+- [Dioxus 0.6](https://dioxuslabs.com/) support
+
+## [0.2.4] 2024-09-11
+
+- Hide new_dynamic in WASM
+- New t!() macro
+
+## [0.2.3] 2024-09-04
+
+- Support dynamic loading of locales
+
+## [0.2.2] 2024-09-02
+
+- Enable macros instead of serde in unic-langid
+
+## [0.2.1] 2024-09-02
+
+- Export unic_langid and fluent
+- Use absolute path to import fluent in the translate macro
+- Updated freya example
+
+## [0.2.0] 2024-09-01
+
+- Now based in the [Fluent Project](https://github.com/projectfluent/fluent-rs)
+
+## [0.1.0] 2024-08-31
+
+- Initial release
