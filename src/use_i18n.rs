@@ -262,8 +262,36 @@ mod test {
     use pretty_assertions::assert_eq;
     use unic_langid::langid;
 
+    #[allow(deprecated)]
     #[test]
     fn can_add_locale_to_config_deprecating() {
+        let lang_a = langid!("la-LA");
+        let lang_b = langid!("la-LB");
+        let lang_c = langid!("la-LC");
+        let config = I18nConfig::new(lang_a.clone())
+            .with_locale(Locale::new_static(lang_b.clone(), "lang = lang_b"))
+            .with_locale(Locale::new_dynamic(lang_c.clone(), PathBuf::new()));
+        assert_eq!(
+            config,
+            I18nConfig {
+                id: lang_a,
+                fallback: None,
+                locales: vec![
+                    Locale {
+                        id: lang_b,
+                        resource: LocaleResource::Static("lang = lang_b")
+                    },
+                    Locale {
+                        id: lang_c,
+                        resource: LocaleResource::Path(PathBuf::new())
+                    }
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn can_add_locale_to_config_v0_4_0() {
         let lang_a = langid!("la-LA");
         let lang_b = langid!("la-LB");
         let lang_c = langid!("la-LC");
