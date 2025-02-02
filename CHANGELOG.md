@@ -1,6 +1,36 @@
 # Changelog
 
-## [0.4.0]
+## [0.4.1]
+
+### Added
+
+- New methods (`I18nConfig::with_auto_locales`) to determine supported locales from deep search for translation files.
+
+- New methods returning `Result<_, Error>` rather than `panic!`, such that:
+
+  | __`panic!` version__                    | __`Result<_, Error>` vesion__            |
+  |--------------------------------  -------|------  ----------------------------------|
+  | `LocaleResource::to_resource_string`    | `LocaleResource::try_to_resource_string` |
+  | `I18n::translate`                       | `I18n::try_translate`                    |
+  | `I18n::translate_with_args`             | `I18n::try_translate_with_args`          |
+  | `I18n::set_fallback_language`           | `I18n::try_set_fallback_language`        |
+  | `I18n::set_language`                    | `I18n::try_set_language`                 |
+  | `use_init_i18n`                         | `try_use_init_i18n`                      |
+  | `I18nConfig::with_auto_locales`         | `I18nConfig::try_with_auto_locales`      |
+
+- New `te!` macro which acts like `t!` but returns `Error`.
+
+- New `tid!` macro which acts like `t!` but returns the message-id.
+
+### Change
+
+- t! macro amended to use `try_translate` and `try_translate_with_args`, but will perform `.expect("..")`
+  and therefore panic! on error. This retains backwards compatibility for this macro.
+
+- Use of `set_fallback_language` / `try_set_fallback_language` without a corresponding locale
+  translation is treated as an error.
+
+## [0.4.0] 2025-01-25
 
 ### Added
 

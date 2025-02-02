@@ -1,11 +1,16 @@
+use super::error::Error;
+
 use dioxus_lib::prelude::*;
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use unic_langid::LanguageIdentifier;
 
+#[cfg(not(target_arch = "wasm32"))]
+use walkdir::WalkDir;
+
 use std::collections::HashMap;
 
 #[cfg(not(target_arch = "wasm32"))]
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// `Locale` is a "place-holder" around what will eventually be a `fluent::FluentBundle`
 #[cfg_attr(test, derive(Debug, PartialEq))]
@@ -50,13 +55,20 @@ pub enum LocaleResource {
 }
 
 impl LocaleResource {
-    pub fn to_resource_string(&self) -> String {
+    pub fn try_to_resource_string(&self) -> Result<String, Error> {
         match self {
-            Self::Static(str) => str.to_string(),
+            Self::Static(str) => Ok(str.to_string()),
             #[cfg(not(target_arch = "wasm32"))]
-            Self::Path(path) => {
-                std::fs::read_to_string(path).expect("Failed to read locale resource")
-            }
+            Self::Path(path) => std::fs::read_to_string(path)
+                .map_err(|e| Error::LocaleResourcePathReadFailed(e.to_string())),
+        }
+    }
+
+    pub fn to_resource_string(&self) -> String {
+        let result = self.try_to_resource_string();
+        match result {
+            Ok(string) => string,
+            Err(err) => panic!("failed to create resource string {:?}: {}", self, err),
         }
     }
 }
@@ -132,6 +144,98 @@ impl I18nConfig {
         self.locales.insert(locale.id, index);
         self
     }
+
+    /// Add multiple locales from given folder, based on their filename.
+    ///
+    /// If the path represents a folder, then the folder will be deep traversed for
+    /// all '*.ftl' files. If the filename represents a [LanguageIdentifier] then it
+    ///  will be added to the config.
+    ///
+    /// If the path represents a file, then the filename must represent a
+    /// unic_langid::LanguageIdentifier for it to be added to the config.
+    ///
+    /// The method is not available for `wasm32` builds.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn try_with_auto_locales(self, path: PathBuf) -> Result<Self, Error> {
+        if path.is_dir() {
+            let files = find_ftl_files(&path)?;
+            files
+                .into_iter()
+                .try_fold(self, |acc, file| acc.with_auto_pathbuf(file))
+        } else if is_ftl_file(&path) {
+            self.with_auto_pathbuf(path)
+        } else {
+            Err(Error::InvalidPath(path.to_string_lossy().to_string()))
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn with_auto_pathbuf(self, file: PathBuf) -> Result<Self, Error> {
+        assert!(is_ftl_file(&file));
+
+        let stem = file.file_stem().ok_or_else(|| {
+            Error::InvalidLanguageId(format!("No file stem: '{}'", file.display()))
+        })?;
+
+        let id_str = stem.to_str().ok_or_else(|| {
+            Error::InvalidLanguageId(format!("Cannot convert: {}", stem.to_string_lossy()))
+        })?;
+
+        let id = LanguageIdentifier::from_bytes(id_str.as_bytes())
+            .map_err(|e| Error::InvalidLanguageId(e.to_string()))?;
+
+        Ok(self.with_locale((id, file)))
+    }
+
+    /// Add multiple locales from given folder, based on their filename.
+    ///
+    /// Will panic! on error.
+    ///
+    /// The method is not available for `wasm32` builds.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn with_auto_locales(self, path: PathBuf) -> Self {
+        let path_name = path.display().to_string();
+        let result = self.try_with_auto_locales(path);
+        match result {
+            Ok(result) => result,
+            Err(err) => panic!(
+                "with_auto_locales must have valid pathbuf {}: {}",
+                path_name, err
+            ),
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn find_ftl_files(folder: &PathBuf) -> Result<Vec<PathBuf>, Error> {
+    let ftl_files: Vec<PathBuf> = WalkDir::new(folder)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| is_ftl_file(entry.path()))
+        .map(|entry| entry.path().to_path_buf())
+        .collect();
+
+    Ok(ftl_files)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn is_ftl_file(entry: &Path) -> bool {
+    entry.is_file() && entry.extension().map(|ext| ext == "ftl").unwrap_or(false)
+}
+
+/// Initialize an i18n provider.
+pub fn try_use_init_i18n(init: impl FnOnce() -> I18nConfig) -> Result<I18n, Error> {
+    use_context_provider(move || {
+        // Coverage false -ve: See https://github.com/xd009642/tarpaulin/issues/1675
+        let I18nConfig {
+            id,
+            fallback,
+            locale_resources,
+            locales,
+        } = init();
+
+        I18n::try_new(id, fallback, locale_resources, locales)
+    })
 }
 
 /// Initialize an i18n provider.
@@ -145,7 +249,10 @@ pub fn use_init_i18n(init: impl FnOnce() -> I18nConfig) -> I18n {
             locales,
         } = init();
 
-        I18n::new(id, fallback, locale_resources, locales)
+        match I18n::try_new(id, fallback, locale_resources, locales) {
+            Ok(i18n) => i18n,
+            Err(e) => panic!("Failed to create I18n context: {}", e),
+        }
     })
 }
 
@@ -159,45 +266,93 @@ pub struct I18n {
 }
 
 impl I18n {
+    pub fn try_new(
+        selected_language: LanguageIdentifier,
+        fallback_language: Option<LanguageIdentifier>,
+        locale_resources: Vec<LocaleResource>,
+        locales: HashMap<LanguageIdentifier, usize>,
+    ) -> Result<Self, Error> {
+        let bundle = try_create_bundle(
+            &selected_language,
+            &fallback_language,
+            &locale_resources,
+            &locales,
+        )?;
+        Ok(Self {
+            selected_language: Signal::new(selected_language),
+            fallback_language: Signal::new(fallback_language),
+            locale_resources: Signal::new(locale_resources),
+            locales: Signal::new(locales),
+            active_bundle: Signal::new(bundle),
+        })
+    }
+
     pub fn new(
         selected_language: LanguageIdentifier,
         fallback_language: Option<LanguageIdentifier>,
         locale_resources: Vec<LocaleResource>,
         locales: HashMap<LanguageIdentifier, usize>,
     ) -> Self {
-        let bundle = create_bundle(
-            &selected_language,
-            &fallback_language,
-            &locale_resources,
-            &locales,
+        let result = Self::try_new(
+            selected_language,
+            fallback_language,
+            locale_resources,
+            locales,
         );
-        Self {
-            selected_language: Signal::new(selected_language),
-            fallback_language: Signal::new(fallback_language),
-            locale_resources: Signal::new(locale_resources),
-            locales: Signal::new(locales),
-            active_bundle: Signal::new(bundle),
+        match result {
+            Ok(i18n) => i18n,
+            Err(err) => panic!("I18n cannot be created: {}", err),
         }
     }
 
-    pub fn translate_with_args(&self, msg: &str, args: Option<&FluentArgs>) -> String {
+    pub fn try_translate_with_args(
+        &self,
+        msg: &str,
+        args: Option<&FluentArgs>,
+    ) -> Result<String, Error> {
         let bundle = self.active_bundle.read();
+
         let message = bundle
             .get_message(msg)
-            .unwrap_or_else(|| panic!("Failed to get message: {}.", msg));
-        let pattern = message.value().expect("Failed to get the message pattern.");
-        let mut errors = vec![];
+            .ok_or_else(|| Error::MessageIdNotFound(msg.into()))?;
 
-        bundle
+        let pattern = message
+            .value()
+            .ok_or_else(|| Error::MessagePatternNotFound(msg.into()))?;
+
+        let mut errors = vec![];
+        let translation = bundle
             .format_pattern(pattern, args, &mut errors)
-            .to_string()
+            .to_string();
+
+        (errors.is_empty())
+            .then_some(translation)
+            .ok_or_else(|| Error::FluentErrorsDetected(format!("{:#?}", errors)))
+    }
+
+    pub fn translate_with_args(&self, msg: &str, args: Option<&FluentArgs>) -> String {
+        let result = self.try_translate_with_args(msg, args);
+        match result {
+            Ok(translation) => translation,
+            Err(err) => panic!("Failed to translate {}: {}", msg, err),
+        }
+    }
+
+    #[inline]
+    pub fn try_translate(&self, msg: &str) -> Result<String, Error> {
+        self.try_translate_with_args(msg, None)
     }
 
     pub fn translate(&self, msg: &str) -> String {
-        self.translate_with_args(msg, None)
+        let result = self.try_translate(msg);
+        match result {
+            Ok(translation) => translation,
+            Err(err) => panic!("Failed to translate {}: {}", msg, err),
+        }
     }
 
     /// Get the selected language.
+    #[inline]
     pub fn language(&self) -> LanguageIdentifier {
         self.selected_language.read().clone()
     }
@@ -208,48 +363,78 @@ impl I18n {
     }
 
     /// Update the selected language.
-    pub fn set_language(&mut self, id: LanguageIdentifier) {
+    pub fn try_set_language(&mut self, id: LanguageIdentifier) -> Result<(), Error> {
         *self.selected_language.write() = id;
-        self.update_active_bundle();
+        self.try_update_active_bundle()
+    }
+
+    /// Update the selected language.
+    pub fn set_language(&mut self, id: LanguageIdentifier) {
+        let id_name = id.to_string();
+        let result = self.try_set_language(id);
+        match result {
+            Ok(()) => (),
+            Err(err) => panic!("cannot set language {}: {}", id_name, err),
+        }
+    }
+
+    /// Update the fallback language.
+    pub fn try_set_fallback_language(&mut self, id: LanguageIdentifier) -> Result<(), Error> {
+        self.locales
+            .read()
+            .get(&id)
+            .ok_or_else(|| Error::FallbackMustHaveLocale(id.to_string()))?;
+
+        *self.fallback_language.write() = Some(id);
+        self.try_update_active_bundle()
     }
 
     /// Update the fallback language.
     pub fn set_fallback_language(&mut self, id: LanguageIdentifier) {
-        *self.fallback_language.write() = Some(id);
-        self.update_active_bundle();
+        let id_name = id.to_string();
+        let result = self.try_set_fallback_language(id);
+        match result {
+            Ok(()) => (),
+            Err(err) => panic!("cannot set fallback language {}: {}", id_name, err),
+        }
     }
 
-    fn update_active_bundle(&mut self) {
-        let bundle = create_bundle(
+    fn try_update_active_bundle(&mut self) -> Result<(), Error> {
+        let bundle = try_create_bundle(
             &self.selected_language.peek(),
             &self.fallback_language.peek(),
             &self.locale_resources.peek(),
             &self.locales.peek(),
-        );
+        )?;
+
         self.active_bundle.set(bundle);
+        Ok(())
     }
 }
 
-fn create_bundle(
+fn try_create_bundle(
     selected_language: &LanguageIdentifier,
     fallback_language: &Option<LanguageIdentifier>,
     locale_resources: &[LocaleResource],
     locales: &HashMap<LanguageIdentifier, usize>,
-) -> FluentBundle<FluentResource> {
+) -> Result<FluentBundle<FluentResource>, Error> {
     let add_resource = move |bundle: &mut FluentBundle<FluentResource>,
                              langid: &LanguageIdentifier,
                              locale_resources: &[LocaleResource]| {
         if let Some(&i) = locales.get(langid) {
             let resource = &locale_resources[i];
-            let resource = FluentResource::try_new(resource.to_resource_string())
-                .expect("Failed to ceate Resource.");
+            let resource =
+                FluentResource::try_new(resource.try_to_resource_string()?).map_err(|e| {
+                    Error::FluentErrorsDetected(format!("resource langid: {}\n{:#?}", langid, e))
+                })?;
             bundle.add_resource_overriding(resource);
-        }
+        };
+        Ok(())
     };
 
     let mut bundle = FluentBundle::new(vec![selected_language.clone()]);
     if let Some(fallback_language) = fallback_language {
-        add_resource(&mut bundle, fallback_language, locale_resources);
+        add_resource(&mut bundle, fallback_language, locale_resources)?;
     }
 
     let (language, script, region, variants) = selected_language.clone().into_parts();
@@ -258,12 +443,12 @@ fn create_bundle(
     let script_lang = LanguageIdentifier::from_parts(language, script, None, &[]);
     let language_lang = LanguageIdentifier::from_parts(language, None, None, &[]);
 
-    add_resource(&mut bundle, &language_lang, locale_resources);
-    add_resource(&mut bundle, &script_lang, locale_resources);
-    add_resource(&mut bundle, &region_lang, locale_resources);
-    add_resource(&mut bundle, &variants_lang, locale_resources);
+    add_resource(&mut bundle, &language_lang, locale_resources)?;
+    add_resource(&mut bundle, &script_lang, locale_resources)?;
+    add_resource(&mut bundle, &region_lang, locale_resources)?;
+    add_resource(&mut bundle, &variants_lang, locale_resources)?;
 
-    bundle
+    Ok(bundle)
 }
 
 pub fn i18n() -> I18n {
@@ -406,5 +591,87 @@ mod test {
                 locales: HashMap::from([(LANG_B, 0), (LANG_C, 0)]),
             }
         );
+    }
+
+    #[test]
+    fn can_auto_add_locales_folder_to_config() {
+        const LANG_A: LanguageIdentifier = langid!("la-LA");
+
+        let root_path_str = &format!("{}/tests/data/fallback/", env!("CARGO_MANIFEST_DIR"));
+        let pathbuf = PathBuf::from(root_path_str);
+
+        let config = I18nConfig::new(LANG_A)
+            .try_with_auto_locales(pathbuf)
+            .ok()
+            .unwrap();
+
+        let expected_locales = [
+            "fb-FB",
+            "la",
+            "la-Scpt",
+            "la-Scpt-LA",
+            "la-Scpt-LA-variants",
+        ];
+
+        assert_eq!(config.locales.len(), expected_locales.len());
+        assert_eq!(config.locale_resources.len(), expected_locales.len());
+
+        expected_locales.into_iter().for_each(|l| {
+            let expected_filename = format!("{root_path_str}/{l}.ftl");
+            let id = LanguageIdentifier::from_bytes(l.as_bytes()).unwrap();
+            assert!(config.locales.get(&id).is_some());
+            assert!(config
+                .locale_resources
+                .contains(&LocaleResource::Path(PathBuf::from(expected_filename))));
+        });
+    }
+
+    #[test]
+    fn can_auto_add_locales_file_to_config() {
+        const LANG_A: LanguageIdentifier = langid!("la-LA");
+
+        let path_str = &format!(
+            "{}/tests/data/fallback/fb-FB.ftl",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let pathbuf = PathBuf::from(path_str);
+
+        let config = I18nConfig::new(LANG_A)
+            .try_with_auto_locales(pathbuf.clone())
+            .ok()
+            .unwrap();
+
+        assert_eq!(config.locales.len(), 1);
+        assert!(config.locales.get(&langid!("fb-FB")).is_some());
+
+        assert_eq!(config.locale_resources.len(), 1);
+        assert!(config
+            .locale_resources
+            .contains(&LocaleResource::Path(pathbuf)));
+    }
+
+    #[test]
+    fn will_fail_auto_locales_with_invalid_folder() {
+        const LANG_A: LanguageIdentifier = langid!("la-LA");
+
+        let root_path_str = &format!("{}/non_existing_path/", env!("CARGO_MANIFEST_DIR"));
+        let pathbuf = PathBuf::from(root_path_str);
+
+        let config = I18nConfig::new(LANG_A).try_with_auto_locales(pathbuf);
+        assert_eq!(config.is_err(), true);
+    }
+
+    #[test]
+    fn will_fail_auto_locales_with_invalid_file() {
+        const LANG_A: LanguageIdentifier = langid!("la-LA");
+
+        let path_str = &format!(
+            "{}/tests/data/fallback/invalid_language_id.ftl",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let pathbuf = PathBuf::from(path_str);
+
+        let config = I18nConfig::new(LANG_A).try_with_auto_locales(pathbuf);
+        assert_eq!(config.is_err(), true);
     }
 }
