@@ -1,6 +1,12 @@
 # Changelog
 
-## [0.4.1]
+## [0.4.2]
+
+### Fixed
+
+- [Issue #15](https://github.com/dioxus-community/dioxus-i18n/issues/15) Recent change to t! macro unnecessarily breaks v0.3 code.
+
+## [0.4.1] 2025-02-02
 
 ### Added
 
