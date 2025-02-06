@@ -66,11 +66,11 @@ macro_rules! te {
 #[macro_export]
 macro_rules! t {
     ($id:expr, $( $name:ident : $value:expr ),* ) => {
-        dioxus_i18n::te!($id, $( $name : $value ),*).expect(concat!("message-id: ", $id, " should be translated"))
+        dioxus_i18n::te!($id, $( $name : $value ),*).expect(&format!("message-id: {} should be translated", $id))
     };
 
     ($id:expr ) => {{
-        dioxus_i18n::te!($id).expect(concat!("message-id: ", $id, " should be translated"))
+        dioxus_i18n::te!($id).expect(&format!("message-id: {} should be translated", $id))
     }};
 }
 
