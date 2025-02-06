@@ -6,6 +6,12 @@
 
 - [Issue #15](https://github.com/dioxus-community/dioxus-i18n/issues/15) Recent change to t! macro unnecessarily breaks v0.3 code.
 
+### Amended
+
+- t! macro amended to use unwrap_or_else rather than panic!.
+
+- Error messages made consistant across all macros.
+
 ## [0.4.1] 2025-02-02
 
 ### Added
