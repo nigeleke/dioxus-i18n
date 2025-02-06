@@ -38,11 +38,9 @@ macro_rules! te {
         }
     };
 
-    ($id:expr ) => {
-        {
+    ($id:expr ) => {{
             dioxus_i18n::prelude::i18n().try_translate($id)
-        }
-    };
+    }};
 }
 
 /// Translate message from key, panic! if id not found...
@@ -66,11 +64,11 @@ macro_rules! te {
 #[macro_export]
 macro_rules! t {
     ($id:expr, $( $name:ident : $value:expr ),* ) => {
-        dioxus_i18n::te!($id, $( $name : $value ),*).expect(&format!("message-id: {} should be translated", $id))
+        dioxus_i18n::te!($id, $( $name : $value ),*).unwrap_or_else(|e| panic!("{}", e.to_string()))
     };
 
     ($id:expr ) => {{
-        dioxus_i18n::te!($id).expect(&format!("message-id: {} should be translated", $id))
+        dioxus_i18n::te!($id).unwrap_or_else(|e| panic!("{}", e.to_string()))
     }};
 }
 
@@ -94,10 +92,10 @@ macro_rules! t {
 #[macro_export]
 macro_rules! tid {
     ($id:expr, $( $name:ident : $value:expr ),* ) => {
-        dioxus_i18n::te!($id, $( $name : $value ),*).unwrap_or(format!("message-id: {:?} should be translated", $id))
+        dioxus_i18n::te!($id, $( $name : $value ),*).unwrap_or_else(|e| e.to_string())
     };
 
     ($id:expr ) => {{
-        dioxus_i18n::te!($id).unwrap_or(format!("message-id: {:?} should be translated", $id))
+        dioxus_i18n::te!($id).unwrap_or_else(|e| e.to_string())
     }};
 }
