@@ -80,7 +80,7 @@ fn failed_to_translate_with_invalid_key_as_id() {
         );
         proxy.assert(
             panic.ok().unwrap(),
-            "message-id: \"invalid\" should be translated".to_string(),
+            "message id not found for key: 'invalid'".to_string(),
             "failed_to_translate_with_invalid_key_as_id",
         );
     });
@@ -97,7 +97,7 @@ fn failed_to_translate_with_invalid_key_with_args_as_id() {
         );
         proxy.assert(
             panic.ok().unwrap(),
-            "message-id: \"invalid\" should be translated".to_string(),
+            "message id not found for key: 'invalid'".to_string(),
             "failed_to_translate_with_invalid_key_with_args_as_id",
         );
     });
