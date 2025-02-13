@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.2]
+## [0.4.2] 2025-02-08
 
 ### Fixed
 
@@ -20,7 +20,7 @@
 
 - New methods returning `Result<_, Error>` rather than `panic!`, such that:
   | __`panic!` version__                    | __`Result<_, Error>` vesion__            |
-  |--------------------------------  -------|------  ----------------------------------|
+  |-----------------------------------------|------------------------------------------|
   | `LocaleResource::to_resource_string`    | `LocaleResource::try_to_resource_string` |
   | `I18n::translate`                       | `I18n::try_translate`                    |
   | `I18n::translate_with_args`             | `I18n::try_translate_with_args`          |
