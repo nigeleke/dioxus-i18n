@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.2]
+## [0.4.2] 2025-02-08
 
 ### Fixed
 
@@ -19,6 +19,7 @@
 - New methods (`I18nConfig::with_auto_locales`) to determine supported locales from deep search for translation files.
 
 - New methods returning `Result<_, Error>` rather than `panic!`, such that:
+
   | __`panic!` version__                    | __`Result<_, Error>` vesion__            |
   |--------------------------------  -------|------  ----------------------------------|
   | `LocaleResource::to_resource_string`    | `LocaleResource::try_to_resource_string` |
