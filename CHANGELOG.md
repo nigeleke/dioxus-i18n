@@ -19,16 +19,15 @@
 - New methods (`I18nConfig::with_auto_locales`) to determine supported locales from deep search for translation files.
 
 - New methods returning `Result<_, Error>` rather than `panic!`, such that:
-
-| __`panic!` version__                    | __`Result<_, Error>` vesion__            |
-|--------------------------------  -------|------  ----------------------------------|
-| `LocaleResource::to_resource_string`    | `LocaleResource::try_to_resource_string` |
-| `I18n::translate`                       | `I18n::try_translate`                    |
-| `I18n::translate_with_args`             | `I18n::try_translate_with_args`          |
-| `I18n::set_fallback_language`           | `I18n::try_set_fallback_language`        |
-| `I18n::set_language`                    | `I18n::try_set_language`                 |
-| `use_init_i18n`                         | `try_use_init_i18n`                      |
-| `I18nConfig::with_auto_locales`         | `I18nConfig::try_with_auto_locales`      |
+  | __`panic!` version__                    | __`Result<_, Error>` vesion__            |
+  |-----------------------------------------|------------------------------------------|
+  | `LocaleResource::to_resource_string`    | `LocaleResource::try_to_resource_string` |
+  | `I18n::translate`                       | `I18n::try_translate`                    |
+  | `I18n::translate_with_args`             | `I18n::try_translate_with_args`          |
+  | `I18n::set_fallback_language`           | `I18n::try_set_fallback_language`        |
+  | `I18n::set_language`                    | `I18n::try_set_language`                 |
+  | `use_init_i18n`                         | `try_use_init_i18n`                      |
+  | `I18nConfig::with_auto_locales`         | `I18nConfig::try_with_auto_locales`      |
 
 - New `te!` macro which acts like `t!` but returns `Error`.
 
