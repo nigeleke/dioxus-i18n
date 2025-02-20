@@ -2,8 +2,14 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
+    #[error("invalid message id: '{0}'")]
+    InvalidMessageId(String),
+
     #[error("message id not found for key: '{0}'")]
     MessageIdNotFound(String),
+
+    #[error("attribute id not found for key: '{0}'")]
+    AttributeIdNotFound(String),
 
     #[error("message pattern not found for key: '{0}'")]
     MessagePatternNotFound(String),

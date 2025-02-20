@@ -310,15 +310,24 @@ impl I18n {
         msg: &str,
         args: Option<&FluentArgs>,
     ) -> Result<String, Error> {
+        let (message_id, attribute_name) = Self::decompose_identifier(msg)?;
+
         let bundle = self.active_bundle.read();
 
         let message = bundle
-            .get_message(msg)
-            .ok_or_else(|| Error::MessageIdNotFound(msg.into()))?;
+            .get_message(message_id)
+            .ok_or_else(|| Error::MessageIdNotFound(message_id.into()))?;
 
-        let pattern = message
-            .value()
-            .ok_or_else(|| Error::MessagePatternNotFound(msg.into()))?;
+        let pattern = if let Some(attribute_name) = attribute_name {
+            let attribute = message
+                .get_attribute(attribute_name)
+                .ok_or_else(|| Error::AttributeIdNotFound(msg.to_string()))?;
+            attribute.value()
+        } else {
+            message
+                .value()
+                .ok_or_else(|| Error::MessagePatternNotFound(message_id.into()))?
+        };
 
         let mut errors = vec![];
         let translation = bundle
@@ -328,6 +337,15 @@ impl I18n {
         (errors.is_empty())
             .then_some(translation)
             .ok_or_else(|| Error::FluentErrorsDetected(format!("{:#?}", errors)))
+    }
+
+    pub fn decompose_identifier(msg: &str) -> Result<(&str, Option<&str>), Error> {
+        let parts: Vec<&str> = msg.split('.').collect();
+        match parts.as_slice() {
+            [message_id] => Ok((message_id, None)),
+            [message_id, attribute_name] => Ok((message_id, Some(attribute_name))),
+            _ => Err(Error::InvalidMessageId(msg.to_string())),
+        }
     }
 
     pub fn translate_with_args(&self, msg: &str, args: Option<&FluentArgs>) -> String {
