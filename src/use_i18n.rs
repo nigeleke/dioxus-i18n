@@ -466,6 +466,14 @@ fn try_create_bundle(
     add_resource(&mut bundle, &region_lang, locale_resources)?;
     add_resource(&mut bundle, &variants_lang, locale_resources)?;
 
+    /* Add this code when the fluent crate includes FluentBundle::add_builtins.
+     * This will allow the use of built-in functions like `NUMBER` and `DATETIME`.
+     * See [Fluent issue](https://github.com/projectfluent/fluent-rs/issues/181) for more information.
+    bundle
+        .add_builtins()
+        .map_err(|e| Error::FluentErrorsDetected(e.to_string()))?;
+    */
+
     Ok(bundle)
 }
 

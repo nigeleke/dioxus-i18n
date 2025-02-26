@@ -1,3 +1,6 @@
+//! This example demonstrates how to use an auto_locales derived I18nConfig.
+//! This is useful when you have a lot of locales and you don't want to manually add them.
+
 use dioxus::prelude::*;
 use dioxus_i18n::{prelude::*, t};
 use unic_langid::langid;
@@ -35,12 +38,9 @@ fn Body() -> Element {
 
 fn app() -> Element {
     use_init_i18n(|| {
-        I18nConfig::new(langid!("en-US"))
-            .with_locale((langid!("en-US"), include_str!("./data/i18n/en-US.ftl")))
-            .with_locale((
-                langid!("es-ES"),
-                PathBuf::from("./examples/data/i18n/es-ES.ftl"),
-            ))
+        // This initialisation performs a deep search for all locales in the given path.
+        // It IS NOT supported in WASM targets.
+        I18nConfig::new(langid!("en-US")).with_auto_locales(PathBuf::from("./examples/data/i18n/"))
     });
 
     rsx!(Body {})
