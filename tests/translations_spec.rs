@@ -104,6 +104,108 @@ fn failed_to_translate_with_invalid_key_with_args_as_id() {
 }
 
 #[test]
+fn translate_root_message_in_attributed_definition() {
+    test_hook(i18n_from_static, |_, proxy| {
+        let panic = std::panic::catch_unwind(|| tid!("my_component"));
+        proxy.assert(
+            panic.is_ok(),
+            true,
+            "translate_root_message_in_attributed_definition",
+        );
+        proxy.assert(
+            panic.ok().unwrap(),
+            "My Component".to_string(),
+            "translate_root_message_in_attributed_definition",
+        );
+    });
+}
+
+#[test]
+fn translate_attribute_with_no_args_in_attributed_definition() {
+    test_hook(i18n_from_static, |_, proxy| {
+        let panic = std::panic::catch_unwind(|| tid!("my_component.placeholder"));
+        proxy.assert(
+            panic.is_ok(),
+            true,
+            "translate_attribute_with_no_args_in_attributed_definition",
+        );
+        proxy.assert(
+            panic.ok().unwrap(),
+            "Component's placeholder".to_string(),
+            "translate_attribute_with_no_args_in_attributed_definition",
+        );
+    });
+}
+
+#[test]
+fn translate_attribute_with_args_in_attributed_definition() {
+    test_hook(i18n_from_static, |_, proxy| {
+        let panic = std::panic::catch_unwind(|| tid!("my_component.hint", name: "Zaphod"));
+        proxy.assert(
+            panic.is_ok(),
+            true,
+            "translate_attribute_with_args_in_attributed_definition",
+        );
+        proxy.assert(
+            panic.ok().unwrap(),
+            "Component's hint with parameter \u{2068}Zaphod\u{2069}".to_string(),
+            "translate_attribute_with_args_in_attributed_definition",
+        );
+    });
+}
+
+#[test]
+fn fail_translate_invalid_attribute_with_no_args_in_attributed_definition() {
+    test_hook(i18n_from_static, |_, proxy| {
+        let panic = std::panic::catch_unwind(|| tid!("my_component.not_a_placeholder"));
+        proxy.assert(
+            panic.is_ok(),
+            true,
+            "fail_translate_invalid_attribute_with_no_args_in_attributed_definition",
+        );
+        proxy.assert(
+            panic.ok().unwrap(),
+            "attribute id not found for key: 'my_component.not_a_placeholder'".to_string(),
+            "fail_translate_invalid_attribute_with_no_args_in_attributed_definition",
+        );
+    });
+}
+
+#[test]
+fn fail_translate_invalid_attribute_with_args_in_attributed_definition() {
+    test_hook(i18n_from_static, |_, proxy| {
+        let panic = std::panic::catch_unwind(|| tid!("my_component.not_a_hint", name: "Zaphod"));
+        proxy.assert(
+            panic.is_ok(),
+            true,
+            "fail_translate_invalid_attribute_with_args_in_attributed_definition",
+        );
+        proxy.assert(
+            panic.ok().unwrap(),
+            "attribute id not found for key: 'my_component.not_a_hint'".to_string(),
+            "fail_translate_invalid_attribute_with_args_in_attributed_definition",
+        );
+    });
+}
+
+#[test]
+fn fail_translate_with_invalid_attribute_key() {
+    test_hook(i18n_from_static, |_, proxy| {
+        let panic = std::panic::catch_unwind(|| tid!("my_component.placeholder.invalid"));
+        proxy.assert(
+            panic.is_ok(),
+            true,
+            "fail_translate_with_invalid_attribute_key",
+        );
+        proxy.assert(
+            panic.ok().unwrap(),
+            "invalid message id: 'my_component.placeholder.invalid'".to_string(),
+            "fail_translate_with_invalid_attribute_key",
+        );
+    });
+}
+
+#[test]
 fn translate_from_dynamic_source() {
     test_hook(i18n_from_dynamic, |_, proxy| {
         let panic = std::panic::catch_unwind(|| {

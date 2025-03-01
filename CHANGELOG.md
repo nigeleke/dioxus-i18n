@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.3]
+
+- [Issue #19](https://github.com/dioxus-community/dioxus-i18n/issues/19) Enable use of "message-id.attribute-id"
+  syntax in the `t!`, `te!`, `tid!` macros in order to extract attribute definition, e.g. `t!("mycomponent.placeholder")`
+  in:
+  ```
+  mycomponent = Component Name
+     .placeholder = Some placeholder
+     .aria-text = Some aria text
+  ```
+
 ## [0.4.2] 2025-02-08
 
 ### Fixed
