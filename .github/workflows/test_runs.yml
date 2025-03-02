@@ -28,10 +28,9 @@ jobs:
               uses: actions/checkout@v4
 
             - name: Compile
-              run:
-                  | # Checks clean compile against `#[cfg(not(target_arch = "wasm32"))]`
-                  | cargo build --target wasm32-unknown-unknown
-                  | cargo build --release
+              run: |
+                  cargo build --target wasm32-unknown-unknown
+                  cargo build --release
 
             - name: Lint
               run: cargo clippy
