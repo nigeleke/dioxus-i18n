@@ -24,10 +24,6 @@ jobs:
                     librsvg2-dev \
                     libglib2.0-dev
 
-            # curl \
-            # wget \
-            # file \
-
             - name: Checkout
               uses: actions/checkout@v4
 
