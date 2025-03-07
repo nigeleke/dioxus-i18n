@@ -40,7 +40,7 @@ fn app() -> Element {
         // The locales can be added with an implicitly derived locale (see config-dynamic-pathbuf.rs for a comparison)
         // or using an explicit Locale::new_dynamic call.
         //
-        // The two wxamples are functionally equivalent.
+        // The two examples are functionally equivalent.
         //
         // It IS supported in WASM targets.
         I18nConfig::new(langid!("en-US"))
