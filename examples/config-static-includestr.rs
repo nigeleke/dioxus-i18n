@@ -47,7 +47,7 @@ fn app() -> Element {
             // Implicit...
             .with_locale((langid!("es-ES"), include_str!("./data/i18n/es-ES.ftl")))
             // Explicit...
-            .with_locale(Locale::new_dynamic(
+            .with_locale(Locale::new_static(
                 langid!("en-US"),
                 include_str!("./data/i18n/en-US.ftl"),
             ))
