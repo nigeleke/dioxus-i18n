@@ -38,7 +38,7 @@ fn app() -> Element {
     use_init_i18n(|| {
         // This initialisation allows individual translation files to be selected.
         // The locales can be added with an implicitly derived locale (see config-dynamic-pathbuf.rs for a comparison)
-        // or using an explicit Locale::new_dynamic call.
+        // or using an explicit Locale::new_static call.
         //
         // The two examples are functionally equivalent.
         //
