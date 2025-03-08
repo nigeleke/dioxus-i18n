@@ -11,6 +11,8 @@
      .aria-text = Some aria text
   ```
 
+- Added examples for all fluent grammar constructs and configuration variants.
+
 ## [0.4.2] 2025-02-08
 
 ### Fixed

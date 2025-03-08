@@ -57,6 +57,21 @@ fn app() -> Element {
 }
 ```
 
+## Further examples
+
+The examples folder contains a number of working examples:
+
+* Desktop examples:
+  * [Dioxus](./examples/dioxus-desktop.rs)
+  * [Freya](./examples/freya.rs)
+* Configuration variants:
+  * [Auto locales](./examples/config-auto-locales.rs)
+  * [Dynamic (PathBuf)](./examples/config-dynamic-pathbuf.rs)
+  * [Static (include_str!)](./examples/config-static-includestr.rs)
+* Fluent grammer:
+  * [Application](./examples/fluent-grammar.rs)
+  * [FTL file](./examples/data/fluent/en.ftl)
+
 ## Development
 
 ```bash
